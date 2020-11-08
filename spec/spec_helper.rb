@@ -8,9 +8,12 @@ SimpleCov.start { enable_coverage :branch }
 require "pry"
 require "pry-byebug"
 require "climate_control"
+require "refinements"
+require "git/kit"
+require "git/kit/rspec/shared_contexts/temp_dir"
+require "git/kit/rspec/shared_contexts/git_repo"
 require "milestoner"
 
-Dir[File.join(__dir__, "support", "shared_contexts", "**/*.rb")].sort.each(&method(:require))
 Dir[File.join(__dir__, "support", "shared_examples", "**/*.rb")].sort.each(&method(:require))
 
 RSpec.configure do |config|
