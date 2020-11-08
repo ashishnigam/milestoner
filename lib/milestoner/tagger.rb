@@ -20,20 +20,19 @@ module Milestoner
     end
 
     def commit_prefix_regex
-      return Regexp.new "" if commit_prefixes.empty?
-
-      Regexp.union commit_prefixes
+      commit_prefixes.empty? ? Regexp.new("") : Regexp.union(commit_prefixes)
     end
 
     def commits
       groups = build_commit_prefix_groups
       group_by_commit_prefix groups
-      groups.each_value(&:sort!)
-      groups.values.flatten.uniq
+      groups.each_value { |commits| commits.sort_by!(&:subject) }
+      groups.values.flatten.uniq(&:subject)
     end
 
+    # :reek:FeatureEnvy
     def commit_list
-      commits.map { |commit| "- #{commit}" }
+      commits.map { |commit| "- #{commit.subject} - #{commit.author_name}" }
     end
 
     # :reek:BooleanParameter
@@ -50,21 +49,15 @@ module Milestoner
     attr_reader :git, :shell
 
     def git_log_command
-      "git log --oneline --no-merges --format='%s'"
+      git.commits
     end
 
     def git_tag_command
-      "$(git describe --abbrev=0 --tags --always)..HEAD"
+      git.commits "#{git.last_tag}..HEAD"
     end
 
-    def git_commits_command
-      return "#{git_log_command} #{git_tag_command}" if git.tagged?
-
-      git_log_command
-    end
-
-    def raw_commits
-      `#{git_commits_command}`.split "\n"
+    def git_commits
+      git.tagged? ? git_tag_command : git_log_command
     end
 
     def build_commit_prefix_groups
@@ -73,10 +66,10 @@ module Milestoner
     end
 
     def group_by_commit_prefix groups = {}
-      raw_commits.each do |commit|
-        prefix = commit[commit_prefix_regex]
+      git_commits.each do |commit|
+        prefix = commit.subject[commit_prefix_regex]
         key = groups.key?(prefix) ? prefix : "Other"
-        groups[key] << commit.gsub(/\[ci\sskip\]/, "").squeeze(" ").strip
+        groups[key] << commit
       end
     end
 

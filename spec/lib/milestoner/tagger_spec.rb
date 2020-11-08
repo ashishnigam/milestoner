@@ -2,7 +2,6 @@
 
 require "spec_helper"
 
-# rubocop:disable RSpec/SubjectStub
 RSpec.describe Milestoner::Tagger, :temp_dir, :git_repo do
   using Refinements::Pathnames
 
@@ -49,125 +48,122 @@ RSpec.describe Milestoner::Tagger, :temp_dir, :git_repo do
         `git rm one.txt`
         `git commit --all --message "Removed one.txt"`
 
-        expect(tagger.commits).to contain_exactly("Removed one.txt")
+        commits = tagger.commits.map(&:subject)
+
+        expect(commits).to contain_exactly("Removed one.txt")
       end
     end
 
     it "answers all commits when not tagged" do
       git_repo_dir.change_dir do
-        expect(tagger.commits).to contain_exactly("Added dummy files")
+        commits = tagger.commits.map(&:subject)
+        expect(commits).to contain_exactly("Added dummy files")
       end
     end
 
     context "with prefixed commits" do
-      let :raw_commits do
-        [
-          "This is not a good commit message",
-          "Updated gem dependencies",
-          "Fixed README typos",
-          "Updated version release notes",
-          "Removed unused stylesheets",
-          "Added spec helper methods",
-          "Refactored authorization to base controller"
-        ]
+      before do
+        git_repo_dir.change_dir do
+          `touch a.txt && git add --all && git commit --message "This is not a good commit message"`
+          `touch b.txt && git add --all && git commit --message "Updated gem dependencies"`
+          `touch c.txt && git add --all && git commit --message "Fixed README typos"`
+          `touch d.txt && git add --all && git commit --message "Updated version release notes"`
+          `touch e.txt && git add --all && git commit --message "Removed unused stylesheets"`
+          `touch g.txt && git add --all && git commit --message "Refactored authorization"`
+        end
       end
 
       let :expectation do
         [
           "Fixed README typos",
-          "Added spec helper methods",
+          "Added dummy files",
           "Updated gem dependencies",
           "Updated version release notes",
           "Removed unused stylesheets",
-          "Refactored authorization to base controller",
+          "Refactored authorization",
           "This is not a good commit message"
         ]
       end
 
-      before { allow(tagger).to receive(:raw_commits).and_return(raw_commits) }
-
       it "answers commits grouped by prefix and alpha-sorted per group" do
-        expect(tagger.commits).to eq(expectation)
+        git_repo_dir.change_dir do
+          commits = tagger.commits.map(&:subject)
+          expect(commits).to eq(expectation)
+        end
       end
     end
 
     context "with prefixed commits using special characters" do
-      subject(:tagger) { described_class.new commit_prefixes: ["[one]", "$\#{@", "with spaces"] }
+      subject(:tagger) { described_class.new commit_prefixes: ["[one]", "=+-#", "with spaces"] }
 
-      let(:raw_commits) { ["Apple", "with spaces yes", "$\#{@ junk", "[one] more"] }
-
-      before { allow(tagger).to receive(:raw_commits).and_return(raw_commits) }
+      before do
+        git_repo_dir.change_dir do
+          `touch a.txt && git add --all && git commit --message "Apple"`
+          `touch b.txt && git add --all && git commit --message "with spaces"`
+          `touch c.txt && git add --all && git commit --message "=+-#"`
+          `touch d.txt && git add --all && git commit --message "[one] more"`
+        end
+      end
 
       it "answers commits grouped by prefix and alpha-sorted per group" do
-        expect(tagger.commits).to eq(["[one] more", "$\#{@ junk", "with spaces yes", "Apple"])
+        git_repo_dir.change_dir do
+          commits = tagger.commits.map(&:subject)
+          expect(commits).to eq(["[one] more", "=+-#", "with spaces", "Added dummy files", "Apple"])
+        end
       end
     end
 
     context "without prefixed commits" do
       let(:prefixes) { [] }
-      let(:raw_commits) { %w[One Two Three] }
 
-      before { allow(tagger).to receive(:raw_commits).and_return(raw_commits) }
+      before do
+        git_repo_dir.change_dir do
+          `touch a.txt && git add --all && git commit --message "One"`
+          `touch b.txt && git add --all && git commit --message "Two"`
+        end
+      end
 
       it "answers alphabetically sorted commits" do
-        expect(tagger.commits).to eq(%w[One Three Two])
+        git_repo_dir.change_dir do
+          commits = tagger.commits.map(&:subject)
+          expect(commits).to eq(["Added dummy files", "One", "Two"])
+        end
       end
     end
 
     context "with duplicate commit messages" do
-      let :raw_commits do
-        [
-          "Added spec helper methods",
-          "Updated gem dependencies",
-          "Updated gem dependencies",
-          "Updated gem dependencies"
-        ]
+      before do
+        git_repo_dir.change_dir do
+          `touch a.txt && git add --all && git commit --message "Updated gem dependencies"`
+          `touch b.txt && git add --all && git commit --message "Updated gem dependencies"`
+        end
       end
-
-      before { allow(tagger).to receive(:raw_commits).and_return(raw_commits) }
 
       it "answers commits with duplicates removed" do
-        expect(tagger.commits).to eq(
-          [
-            "Added spec helper methods",
-            "Updated gem dependencies"
-          ]
-        )
-      end
-    end
-
-    context "with commit messages that include [ci skip] strings" do
-      subject(:tagger) { described_class.new commit_prefixes: %w[Fixed Added] }
-
-      let :raw_commits do
-        [
-          "Fixed failing [ci skip] CI builds",
-          "Added spec helper methods [ci skip]",
-          "[ci skip] Updated gem dependencies"
-        ]
-      end
-
-      before { allow(tagger).to receive(:raw_commits).and_return(raw_commits) }
-
-      it "answers commits messages with [ci skip] strings removed" do
-        expect(tagger.commits).to eq(
-          [
-            "Fixed failing CI builds",
-            "Added spec helper methods",
-            "Updated gem dependencies"
-          ]
-        )
+        git_repo_dir.change_dir do
+          commits = tagger.commits.map(&:subject)
+          expect(commits).to eq(["Added dummy files", "Updated gem dependencies"])
+        end
       end
     end
   end
 
   describe "#commit_list" do
-    let(:raw_commits) { %w[One Two Three] }
-
-    before { allow(tagger).to receive(:raw_commits).and_return(raw_commits) }
+    before do
+      git_repo_dir.change_dir do
+        `touch a.txt && git add --all && git commit --message "One"`
+        `touch b.txt && git add --all && git commit --message "Two"`
+      end
+    end
 
     it "answers a formatted list of commit messages" do
-      expect(tagger.commit_list).to contain_exactly("- One", "- Two", "- Three")
+      git_repo_dir.change_dir do
+        expect(tagger.commit_list).to contain_exactly(
+          "- Added dummy files - Test Example",
+          "- One - Test Example",
+          "- Two - Test Example"
+        )
+      end
     end
   end
 
@@ -209,10 +205,10 @@ RSpec.describe Milestoner::Tagger, :temp_dir, :git_repo do
 
         expect(tag_details.call("0.1.0")).to match(/
           Version\s0\.1\.0\n\n
-          -\sFixed\sthree\n
-          -\sAdded\sdummy\sfiles\n
-          -\sUpdated\stwo\n
-          -\sRemoved\sone\n\n\n\n
+          -\sFixed\sthree\s-\sTest\sExample\n
+          -\sAdded\sdummy\sfiles\s-\sTest\sExample\n
+          -\sUpdated\stwo\s-\sTest\sExample\n
+          -\sRemoved\sone\s-\sTest\sExample\n\n\n\n
         /x)
       end
     end
@@ -227,8 +223,8 @@ RSpec.describe Milestoner::Tagger, :temp_dir, :git_repo do
 
         expect(tag_details.call("0.1.0")).to match(/
           Version\s0\.1\.0\n\n
-          -\sAdded\sdummy\sfiles\n
-          -\sUpdated\stwo\.txt\swith\s`bogus\scommand`\sin\smessage\n\n\n\n
+          -\sAdded\sdummy\sfiles\s-\sTest\sExample\n
+          -\sUpdated\stwo\.txt\swith\s`bogus\scommand`\sin\smessage\s-\sTest\sExample\n\n\n\n
         /x)
       end
     end
@@ -309,4 +305,3 @@ RSpec.describe Milestoner::Tagger, :temp_dir, :git_repo do
     end
   end
 end
-# rubocop:enable RSpec/SubjectStub
