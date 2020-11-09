@@ -27,7 +27,7 @@ RSpec.describe Milestoner::CLI do
       it "prints commits for new tag" do
         git_repo_dir.change_dir do
           result = proc { cli }
-          expect(&result).to output(/-\sAdded\sdummy\sfiles\n/).to_stdout
+          expect(&result).to output(/-\sAdded\sdummy\sfiles\s-\sTest\sExample\n/).to_stdout
         end
       end
     end
